@@ -1,0 +1,74 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <string.h>
+
+#define BUFFER_SIZE 1024
+#define PORT 8091
+
+int main() {
+    int clientsock;
+    struct sockaddr_in server_addr;
+    char buffer[BUFFER_SIZE];
+    char last_sent[BUFFER_SIZE]; // Store last sent message
+    socklen_t addrlen = sizeof(struct sockaddr_in);
+
+    // Create socket
+    clientsock = socket(AF_INET, SOCK_STREAM, 0);
+    if (clientsock == -1) {
+        perror("Error creating socket");
+        exit(EXIT_FAILURE);
+    }
+
+    // Configure server
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    server_addr.sin_port = htons(PORT);
+
+    // Connect to server
+    if (connect(clientsock, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
+        perror("Connection failed");
+        exit(EXIT_FAILURE);
+    }
+
+    while (1) {
+        printf("Enter message to send (type 'exit' to quit): ");
+        fgets(buffer, BUFFER_SIZE, stdin);
+        buffer[strcspn(buffer, "\n")] = 0; // Remove newline
+
+        if (strcmp(buffer, "exit") == 0) {
+            break;
+        }
+
+        // Store last sent message
+        strcpy(last_sent, buffer);
+
+        // Simulate packet loss randomly
+        int randomLoss = rand() % 2;
+        if (randomLoss == 1) {
+            printf("Frame lost! Not sending: %s\n", last_sent);
+        } else {
+            send(clientsock, buffer, strlen(buffer), 0);
+            printf("Frame sent: %s\n", buffer);
+        }
+
+        // Receive acknowledgment
+        memset(buffer, 0, BUFFER_SIZE);
+        recv(clientsock, buffer, BUFFER_SIZE, 0);
+        printf("Server response: %s\n", buffer);
+
+        if (strcmp(buffer, "NACK") == 0) {
+            printf("Resending frame: %s\n", last_sent);
+            send(clientsock, last_sent, strlen(last_sent), 0);
+            
+            memset(buffer, 0, BUFFER_SIZE);
+            recv(clientsock, buffer, BUFFER_SIZE, 0);
+            printf("Server response: %s\n", buffer);
+            
+        }
+    }
+
+    close(clientsock);
+    return 0;
+}
