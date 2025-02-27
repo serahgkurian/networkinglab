@@ -1,0 +1,47 @@
+Server program:
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;arpa/inet.h&gt;
+#define PORT 8091
+#define BUFFER_SIZE 1024
+int main() {
+    int server_socket;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t addr_size = sizeof(struct sockaddr_in);
+    char buffer[BUFFER_SIZE];
+    // Create UDP socket
+    server_socket = socket(AF_INET, SOCK_DGRAM, 0);
+    if (server_socket == -1) {
+        perror(&quot;Error creating socket&quot;);
+        exit(EXIT_FAILURE);
+    }
+    // Configure server address
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
+    // Bind the socket
+    if (bind(server_socket, (struct sockaddr*)&amp;server_addr, sizeof(server_addr)) == -1) {
+        perror(&quot;Error binding socket&quot;);
+        exit(EXIT_FAILURE);
+    }
+    printf(&quot;Server listening on port %d...\n&quot;, PORT);
+    while (1) {
+        // Receive message from client
+        memset(buffer, 0, BUFFER_SIZE);
+        int recv_len = recvfrom(server_socket, buffer, BUFFER_SIZE, 0, (struct sockaddr*)&amp;client_addr,
+&amp;addr_size);
+        if (recv_len == -1) {
+            perror(&quot;Error receiving message&quot;);
+            continue;
+        }
+        printf(&quot;Client: %s&quot;, buffer);
+        // Send response to the client
+        printf(&quot;Server: &quot;);
+        fgets(buffer, BUFFER_SIZE, stdin);
+        sendto(server_socket, buffer, strlen(buffer), 0, (struct sockaddr*)&amp;client_addr, addr_size);
+    }
+    close(server_socket);
+    return 0;
+}
