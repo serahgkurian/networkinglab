@@ -1,0 +1,41 @@
+#include &lt;stdio.h&gt;
+
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;arpa/inet.h&gt;
+#define PORT 8091
+#define BUFFER_SIZE 1024
+int main() {
+    int client_socket;
+    struct sockaddr_in server_addr;
+    char buffer[BUFFER_SIZE];
+    // Create UDP socket
+    client_socket = socket(AF_INET, SOCK_DGRAM, 0);
+    if (client_socket == -1) {
+        perror(&quot;Error creating socket&quot;);
+        exit(EXIT_FAILURE);
+    }
+    // Configure server address
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = inet_addr(&quot;127.0.0.1&quot;); // Server address (localhost)
+    server_addr.sin_port = htons(PORT);
+    while (1) {
+        printf(&quot;Enter message to send to server (type &#39;exit&#39; to quit): &quot;);
+        fgets(buffer, BUFFER_SIZE, stdin);
+        // Send message to server
+        sendto(client_socket, buffer, strlen(buffer), 0, (struct sockaddr*)&amp;server_addr, sizeof(server_addr));
+        if (strcmp(buffer, &quot;exit\n&quot;) == 0)
+            break;
+        // Receive response from server
+        memset(buffer, 0, BUFFER_SIZE);
+        int recv_len = recvfrom(client_socket, buffer, BUFFER_SIZE, 0, NULL, NULL);
+        if (recv_len == -1) {
+            perror(&quot;Error receiving message&quot;);
+            continue;
+        }
+        printf(&quot;Received from server: %s\n&quot;, buffer);
+    }
+    close(client_socket);
+    return 0;
+}
