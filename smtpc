@@ -1,0 +1,104 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+
+#define PORT 8091
+#define BUFFER_SIZE 1024
+
+int main() {
+    int client_socket;
+    struct sockaddr_in server_addr;
+    char buffer[BUFFER_SIZE];
+
+    // Create socket
+    client_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (client_socket == -1) {
+        perror("Error creating socket");
+        exit(EXIT_FAILURE);
+    }
+
+    // Configure server address
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    server_addr.sin_port = htons(PORT);
+
+    // Connect to the server
+    if (connect(client_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
+        perror("Error connecting to server");
+        exit(EXIT_FAILURE);
+    }
+
+    // Send HELO
+    printf("C: HELO\n");
+    strcpy(buffer, "HELO");
+    send(client_socket, buffer, strlen(buffer), 0);
+
+    // Receive response
+    memset(buffer, 0, BUFFER_SIZE);
+    recv(client_socket, buffer, BUFFER_SIZE, 0);
+    printf("S: %s\n", buffer);  // Should print "S: 250"
+
+    // Get sender email
+    printf("C: MAIL FROM: ");
+    memset(buffer, 0, BUFFER_SIZE);
+    fgets(buffer, BUFFER_SIZE, stdin);
+    send(client_socket, buffer, strlen(buffer), 0);
+
+    // Receive response
+    memset(buffer, 0, BUFFER_SIZE);
+    recv(client_socket, buffer, BUFFER_SIZE, 0);
+    printf("S: %s\n", buffer);  // Should print "S: 250 OK"
+
+    // Get recipient email
+    printf("C: RCPT TO: ");
+    memset(buffer, 0, BUFFER_SIZE);
+    fgets(buffer, BUFFER_SIZE, stdin);
+    send(client_socket, buffer, strlen(buffer), 0);
+
+    // Receive response
+    memset(buffer, 0, BUFFER_SIZE);
+    recv(client_socket, buffer, BUFFER_SIZE, 0);
+    printf("S: %s\n", buffer);  // Should print "S: 250 Accepted"
+
+    // Send DATA command
+    printf("C: DATA\n");
+    strcpy(buffer, "DATA");
+    send(client_socket, buffer, strlen(buffer), 0);
+
+    // Receive response
+    memset(buffer, 0, BUFFER_SIZE);
+    recv(client_socket, buffer, BUFFER_SIZE, 0);
+    printf("S: %s\n", buffer);  // Should print "S: 354 End data with ."
+
+    // Send email body
+    printf("Enter your email message (type '.' alone to end):\n");
+    while (1) {
+        memset(buffer, 0, BUFFER_SIZE);
+        fgets(buffer, BUFFER_SIZE, stdin);
+        send(client_socket, buffer, strlen(buffer), 0);
+
+        if (strcmp(buffer, ".\n") == 0) {
+            break;
+        }
+    }
+
+    // Receive response
+    memset(buffer, 0, BUFFER_SIZE);
+    recv(client_socket, buffer, BUFFER_SIZE, 0);
+    printf("S: %s\n", buffer);  // Should print "S: 250 Message accepted"
+
+    // Send QUIT
+    printf("C: QUIT\n");
+    strcpy(buffer, "QUIT");
+    send(client_socket, buffer, strlen(buffer), 0);
+
+    // Receive final response
+    memset(buffer, 0, BUFFER_SIZE);
+    recv(client_socket, buffer, BUFFER_SIZE, 0);
+    printf("S: %s\n", buffer);  // Should print "S: 221 Bye"
+
+    close(client_socket);
+    return 0;
+}
