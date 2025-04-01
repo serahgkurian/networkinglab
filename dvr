@@ -1,0 +1,65 @@
+#include <stdio.h>
+
+#define INF 9999   // Define infinity as a large value
+#define MAX_NODES 10  // Maximum number of nodes
+
+int cost[MAX_NODES][MAX_NODES];  // Cost matrix
+int distance[MAX_NODES][MAX_NODES];  // Distance table
+int nodes;
+
+// Function to get input for cost matrix
+void getInput() {
+    printf("Enter the cost matrix (use -1 for infinity):\n");
+    for (int i = 0; i < nodes; i++) {
+        for (int j = 0; j < nodes; j++) {
+            scanf("%d", &cost[i][j]);
+            if (cost[i][j] == -1) {
+                cost[i][j] = INF;  // Replace -1 with INF
+            }
+            distance[i][j] = cost[i][j];  // Initialize distance table
+        }
+    }
+}
+
+// Function to implement the Distance Vector Routing Algorithm
+void distanceVectorRouting() {
+    int updated;
+    do {
+        updated = 0;
+        for (int i = 0; i < nodes; i++) {  // For each node
+            for (int j = 0; j < nodes; j++) {  // For each destination
+                for (int k = 0; k < nodes; k++) {  // For each intermediate node
+                    if (distance[i][k] + distance[k][j] < distance[i][j]) {
+                        distance[i][j] = distance[i][k] + distance[k][j];
+                        updated = 1;
+                    }
+                }
+            }
+        }
+    } while (updated);
+}
+
+// Function to display the routing table
+void printRoutingTable() {
+    for (int i = 0; i < nodes; i++) {
+        printf("\nRouting table for Node %d:\n", i);
+        printf("Destination\tCost\n");
+        for (int j = 0; j < nodes; j++) {
+            if (distance[i][j] == INF)
+                printf("%d\t\tINF\n", j);
+            else
+                printf("%d\t\t%d\n", j, distance[i][j]);
+        }
+    }
+}
+
+int main() {
+    printf("Enter number of nodes: ");
+    scanf("%d", &nodes);
+
+    getInput();  // Get cost matrix input
+    distanceVectorRouting();  // Run DVR algorithm
+    printRoutingTable();  // Display routing table
+
+    return 0;
+}
