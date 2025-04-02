@@ -3,86 +3,80 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <time.h>
-
-#define PORT 8091
-#define BUFFER_SIZE 5   // One character + null terminator
-#define WINDOW_SIZE 4   // Fixed sliding window size
-
+#define PORT 8102
+#define BUFFER_SIZE 1024
+#define TIMEOUT 3 // Timeout in seconds
 int main() {
-    int client_socket;
-    struct sockaddr_in server_addr;
-    char buffer[BUFFER_SIZE];
-    char cirq[WINDOW_SIZE];  // Circular queue for sliding window
-    int i = 0;  // Index pointer for current frame in the window
-
-    // Initialize random seed
-    srand(time(NULL));
-
-    // Create socket
-    client_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (client_socket == -1) {
-        perror("Error creating socket");
-        exit(EXIT_FAILURE);
-    }
-
-    // Configure server address
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    server_addr.sin_port = htons(PORT);
-
-    // Connect to the server
-    if (connect(client_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
-        perror("Error connecting to server");
-        exit(EXIT_FAILURE);
-    }
-
-    printf("Connected to server.\n");
-
-    // Take initial input for the window
-    printf("Enter %d numbers (or '0' to exit):\n", WINDOW_SIZE);
-    for (int j = 0; j < WINDOW_SIZE; j++) {
-        scanf(" %c", &cirq[j]);
-    }
-
-    // Start sending frames
-    while (1) {
-        // Simulate message loss
-        if (rand() % 2 == 0) {
-            printf("Frame %c lost! (Simulated)\n", cirq[i % WINDOW_SIZE]);
-        } else {
-            // Send current frame from the queue
-            buffer[0] = cirq[i % WINDOW_SIZE];
-            buffer[1] = '\0';
-            printf("Sent: %c\n", cirq[i % WINDOW_SIZE]);
-            send(client_socket, buffer, strlen(buffer), 0);
-        }
-
-        // Receive response from server
-        memset(buffer, 0, BUFFER_SIZE);
-        recv(client_socket, buffer, BUFFER_SIZE, 0);
-        printf("Received from server: %s\n", buffer);
-
-        if (strcmp(buffer, "ACK") == 0) {
-            // Move to the next frame and update circular queue
-            i++;
-            printf("Enter next number for the queue (or '0' to exit): ");
-            scanf(" %c", &cirq[i % WINDOW_SIZE]);
-            if (cirq[i % WINDOW_SIZE] == '0') {
-                close(client_socket);
-                printf("Client exiting...\n");
-                return 0;
-            }
-        } else if (strcmp(buffer, "NACK") == 0) {
-            // Print only the lost frames that need retransmission
-            printf("NACK received. Retransmitting: ");
-            for (int j = 1; j < WINDOW_SIZE; j++) {  // Start from i+1 (skipping already ACKed)
-                printf("%c ", cirq[(i + j) % WINDOW_SIZE]);
-            }
-            printf("\n");
-        }
-    }
-
-    close(client_socket);
-    return 0;
+	int client_socket;
+	struct sockaddr_in server_addr;
+	int window_size, i, base = 0, next_seq_num = 0, total_numbers;
+	int numbers[BUFFER_SIZE];
+	// Create socket
+	client_socket = socket(AF_INET, SOCK_STREAM, 0);
+	if (client_socket == -1) {
+		perror("Error creating socket");
+		exit(EXIT_FAILURE);
+	}
+	// Configure server address
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+	server_addr.sin_port = htons(PORT);
+	// Connect to server
+	if (connect(client_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
+		perror("Error connecting to server");
+		close(client_socket);
+		exit(EXIT_FAILURE);
+	}
+	// Input window size and array
+	printf("Enter window size: ");
+	scanf("%d", &window_size);
+	printf("Enter number of elements: ");
+	scanf("%d", &total_numbers);
+	printf("Enter the numbers: ");
+	for (i = 0; i < total_numbers; i++) {
+		scanf("%d", &numbers[i]);
+	}
+	char buffer[BUFFER_SIZE];
+	while (base < total_numbers) {
+			// Send numbers within window size
+		while (next_seq_num < base + window_size && next_seq_num < total_numbers) {
+			sprintf(buffer, "%d %d", next_seq_num, numbers[next_seq_num]);
+			send(client_socket, buffer, strlen(buffer), 0);
+			printf("Sent: Seq %d\n", next_seq_num);
+			next_seq_num++;
+		}
+		// Wait for ACKs
+		int ack_received = 0;
+		while (!ack_received) {
+			fd_set read_fds;
+			struct timeval tv;
+			tv.tv_sec = TIMEOUT;
+			tv.tv_usec = 0;
+			FD_ZERO(&read_fds);
+			FD_SET(client_socket, &read_fds);
+			int retval = select(client_socket + 1, &read_fds, NULL, NULL, &tv);
+			if (retval == -1) {
+				perror("Error during select");
+				break;
+			} else if (retval == 0) {
+				printf("Timeout! Resending from sequence %d\n", base);
+				next_seq_num = base; // Resend only unacknowledged packets
+				break;
+			} else {
+				memset(buffer, 0, BUFFER_SIZE);
+				recv(client_socket, buffer, BUFFER_SIZE, 0);
+				int ack_num;
+				if (sscanf(buffer, "ACK %d", &ack_num) == 1) {
+					printf("Received ACK for sequence %d\n", ack_num);
+					if (ack_num >= base) {
+					base = ack_num + 1; // Move base forward
+					ack_received = 1;
+					}
+				}
+			}
+		}
+	}
+printf("All numbers sent successfully!\n");
+close(client_socket);
+return 0;
 }
